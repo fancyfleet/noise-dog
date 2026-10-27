@@ -196,6 +196,15 @@ export class Visit {
   async nextPresetByKey() { await this.#pressOnBody('ArrowRight'); }
   async pressKey(key) { await this.#pressOnBody(key); }
 
+  /** Wait (real time) for GoatCounter's count.js to have executed; the page clock is frozen so poll from Node. */
+  async untilCounterReady(attempts = 50) {
+    for (let i = 0; i < attempts; i += 1) {
+      if (await this.page.evaluate(() => !!(window.goatcounter && window.goatcounter.count))) return;
+      await sleep(100);
+    }
+    throw new Error('count.js did not become ready after it was released');
+  }
+
   /** What the visitor sees: the play button's own announcement of whether the page believes it is playing. */
   async uiPlaying() { return (await this.page.getAttribute('#playBtn', 'aria-pressed')) === 'true'; }
 

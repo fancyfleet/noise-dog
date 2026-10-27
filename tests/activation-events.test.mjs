@@ -312,7 +312,7 @@ describe('I4: the tracking transport is never allowed to change what counts', ()
       await v.advance(BEFORE);               // still holding: ten real minutes pass before the script arrives
       await v.advance(AFTER - BEFORE);
       v.releaseCountJs();
-      await v.page.waitForFunction(() => !!(window.goatcounter && window.goatcounter.count), null, { polling: 50 });
+      await v.untilCounterReady();
       await v.advance(1);
       expectCounts(v, { audio: 1, engaged: 1 }, 'the visitor started audio and listened for ten minutes; a slow third-party script must not erase that (events dropped because window.goatcounter was not ready)');
     });
