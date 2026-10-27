@@ -26,20 +26,22 @@ npx serve . # or python3 -m http.server 8080
 
 ## Deploy
 
-**Workflow: local → GitHub → Yaguchi**
+**Workflow: feature branch → PR into `main` → Yaguchi**
 
-1. Make changes locally in `/home/fancymatt/noise.dog`
-2. Test in browser before committing
-3. Commit and push to GitHub:
+Production tracks **`main`** (trunk-based; `develop` is legacy and being retired). Never pull `develop` onto production.
+
+1. Branch from `main`, make changes, and test in the browser before committing
+2. Push the branch and open a PR targeting `main`:
    ```bash
-   git add -A
-   git commit -m "your message"
-   git push origin main
+   git push origin feature/<ticket>-<slug>
    ```
-4. Deploy to production (Yaguchi):
+3. After the PR is reviewed and merged to `main`, deploy to production (Yaguchi):
    ```bash
    ssh root@146.190.2.164 'cd /var/www/noise.dog && git pull origin main'
    ```
+4. Verify: `curl -s https://noise.dog/ | sha256sum` should equal `git show origin/main:index.html | sha256sum`.
+
+Containerized agents cannot SSH to Yaguchi; step 3 is run by Grover or Matt.
 
 **Do not edit files directly on the server.**
 
