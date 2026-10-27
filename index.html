@@ -1385,6 +1385,7 @@
       gainNode = ctx.createGain();
       gainNode.gain.value = volumeSlider ? parseInt(volumeSlider.value, 10) / 100 : 0.5;
       gainNode.connect(ctx.destination);
+      ctx.addEventListener('statechange', syncListening);
       initBuffers();
     }
 
@@ -1429,7 +1430,10 @@
     // Start the current preset from silence (initial play).
     function startPreset() {
       if (!ctx) createAudioContext();
-      if (ctx.state === 'suspended') ctx.resume();
+      if (ctx.state === 'suspended') {
+        const resumed = ctx.resume();
+        if (resumed && resumed.then) resumed.then(syncListening, () => {});
+      }
 
       for (const layer of activeLayers) stopLayer(layer);
       activeLayers = PRESETS[currentPresetIndex].layers.map(l => createLayer(l));
@@ -1546,43 +1550,93 @@
         startPreset();
         showGlow();
         presetNameEl.classList.add('playing');
-        onAudioStart();
+        syncListening();
       } else {
         stopPreset();
         hideGlow();
         presetNameEl.classList.remove('playing');
-        onAudioStop();
+        syncListening();
       }
     }
 
-    // ─── Analytics event tracking ─────────────────────────────
+    // ─── Analytics: GoatCounter activation events ─────────────
+    // audio_start      first moment audio is audibly running (AudioContext 'running' while playing).
+    // engaged_10min    10 minutes of audible playing time. Paused, suspended or interrupted audio and
+    //                  time before the first note do not count; a preset switch keeps the total.
+    // Each fires at most once per page load. A reload or navigation is a new visit and starts over.
+    //
+    // Internal traffic: a visit to /?internal=<tag> sends EVERY hit (pageview and both events) under
+    // internal/<tag>/, so one `internal/` path filter removes it from numerator and denominator alike.
+    // The tag is read once at load (history.replaceState rewrites the URL later). A malformed or
+    // repeated tag fails closed into internal/invalid/ rather than leaking onto a public path.
+    // No per-event source category is sent (that would need privacy review).
+    const ENGAGED_MS = 10 * 60 * 1000;
+
+    const GC_INTERNAL = (() => {
+      const vals = new URLSearchParams(window.location.search).getAll('internal');
+      if (!vals.length) return null;
+      const tag = vals[0];
+      const ok = vals.length === 1 && /^[A-Za-z0-9._-]{1,64}$/.test(tag) && /[^.]/.test(tag);
+      return ok ? tag : 'invalid';
+    })();
+    const GC_PREFIX = GC_INTERNAL ? 'internal/' + GC_INTERNAL + '/' : '';
+
+    // count.js is async, so hits are queued until window.goatcounter.count exists (flushed from the
+    // script tag's onload). If count.js never loads (blocked/offline) nothing is sent and playback is unaffected.
+    const gcQueue = [];
+    function gcFlush() {
+      if (!(window.goatcounter && typeof window.goatcounter.count === 'function')) return;
+      while (gcQueue.length) {
+        try { window.goatcounter.count(gcQueue.shift()); } catch (_) {}
+      }
+    }
+    function gcSend(vars) {
+      if (gcQueue.length < 20) gcQueue.push(vars);
+      gcFlush();
+    }
+    function gcTrack(name) { gcSend({ path: GC_PREFIX + name, event: true }); }
+
+    if (GC_INTERNAL) {
+      // Suppress count.js's automatic pageview (it would use the public canonical path) and send our own.
+      window.goatcounter = { no_onload: true };
+      gcSend({ path: GC_PREFIX });
+    }
+
     let _audioStartFired = false;
     let _engagedFired    = false;
-    let _engagedTimer    = null;
+    let _playedMs        = 0;     // audible playing time accumulated so far
+    let _lastTick        = null;  // performance.now() when audible counting last resumed, else null
+    let _listenTimer     = null;
 
-    function gcTrack(path) {
-      if (window.goatcounter && window.goatcounter.count) {
-        window.goatcounter.count({ path, event: true });
-      }
+    function isAudible() {
+      return isPlaying && !!ctx && ctx.state === 'running';
     }
 
-    function onAudioStart() {
-      if (!_audioStartFired) {
+    // Fold elapsed audible time into the total, then re-evaluate. Called on play/pause, AudioContext
+    // state changes and a 1 s tick while playing. performance.now() deltas stay right even when a
+    // background tab throttles the tick.
+    function syncListening() {
+      const now = performance.now();
+      if (_lastTick !== null) _playedMs += Math.max(0, now - _lastTick);
+      const audible = isAudible();
+      _lastTick = audible ? now : null;
+
+      if (audible && !_audioStartFired) {
         _audioStartFired = true;
         gcTrack('audio_start');
       }
-      if (!_engagedFired) {
-        clearTimeout(_engagedTimer);
-        _engagedTimer = setTimeout(() => {
-          _engagedFired = true;
-          gcTrack('engaged_10min');
-        }, 10 * 60 * 1000);
+      if (_playedMs >= ENGAGED_MS && !_engagedFired) {
+        _engagedFired = true;
+        gcTrack('engaged_10min');
       }
-    }
 
-    function onAudioStop() {
-      clearTimeout(_engagedTimer);
-      _engagedTimer = null;
+      const needTimer = isPlaying && !_engagedFired;
+      if (needTimer && _listenTimer === null) {
+        _listenTimer = setInterval(syncListening, 1000);
+      } else if (!needTimer && _listenTimer !== null) {
+        clearInterval(_listenTimer);
+        _listenTimer = null;
+      }
     }
 
     // ─── Preset name transition ───────────────────────────────
@@ -2604,7 +2658,7 @@
     })();
   </script>
 
-  <script data-goatcounter="https://fancymatt.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+  <script data-goatcounter="https://fancymatt.goatcounter.com/count" async src="//gc.zgo.at/count.js" onload="gcFlush()"></script>
   <a class="site-byline" href="https://fancyma.tt" target="_blank" rel="noopener noreferrer">fancyma.tt</a>
 </body>
 </html>
