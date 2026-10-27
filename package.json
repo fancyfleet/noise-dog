@@ -1,0 +1,11 @@
+{
+  "name": "noise-dog",
+  "private": true,
+  "description": "noise.dog static site. Tests only; there is no build step.",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 \"tests/*.test.mjs\""
+  },
+  "devDependencies": {
+    "playwright-core": "1.61.1"
+  }
+}
