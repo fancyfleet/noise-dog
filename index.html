@@ -335,14 +335,14 @@
         to right,
         var(--color-accent) 0%,
         var(--color-accent) var(--vol-pct),
-        #2a2420 var(--vol-pct),
-        #2a2420 100%
+        var(--color-surface) var(--vol-pct),
+        var(--color-surface) 100%
       );
     }
     .volume-slider::-moz-range-track {
       height: 3px;
       border-radius: 2px;
-      background: #2a2420;
+      background: var(--color-surface);
     }
     .volume-slider::-moz-range-progress {
       height: 3px;
@@ -1680,10 +1680,9 @@
     }
 
     function updatePresetUrl(index) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('p', PRESETS[index].param);
-      url.searchParams.delete('preset');
-      history.replaceState(null, '', url.toString());
+      const slug = PRESETS[index].slug;
+      const pathname = '/' + slug;
+      history.replaceState(null, '', pathname);
     }
 
     // ─── Select preset ────────────────────────────────────────
@@ -2627,25 +2626,31 @@
       mergeCustomPresets();
 
       const params = new URLSearchParams(window.location.search);
-      const shortParam = params.get('p');
-      const legacySlug = params.get('preset');
+      const pathname = window.location.pathname.replace(/\/$/, '');
+      let idx = -1;
 
-      let idx = PRESETS.findIndex(preset => preset.param === shortParam);
-      let shouldNormalizeUrl = Boolean(shortParam || legacySlug);
-
-      if (idx < 0 && legacySlug) {
-        idx = PRESETS.findIndex(preset => preset.slug === legacySlug);
+      // Try pathname-based routing first (clean URLs like /brown-noise)
+      if (pathname) {
+        const pathSlug = pathname.startsWith('/') ? pathname.slice(1) : pathname;
+        idx = PRESETS.findIndex(preset => preset.slug === pathSlug);
       }
+
+      // Fall back to query param routing for backward compat (/?p=df)
+      if (idx < 0) {
+        const shortParam = params.get('p');
+        const legacySlug = params.get('preset');
+        idx = PRESETS.findIndex(preset => preset.param === shortParam);
+        if (idx < 0 && legacySlug) {
+          idx = PRESETS.findIndex(preset => preset.slug === legacySlug);
+        }
+      }
+
+      let shouldNormalizeUrl = false;
 
       if (idx >= 0 && !PRESETS[idx].custom) {
         currentPresetIndex = idx;
-        if (shortParam !== PRESETS[idx].param || legacySlug) {
-          updatePresetUrl(idx);
-        }
       } else if (idx >= 0) {
         currentPresetIndex = idx;
-      } else {
-        shouldNormalizeUrl = false;
       }
 
       buildPresetButtons();

@@ -6,27 +6,27 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://noise.dog/?p=df</loc>
+    <loc>https://noise.dog/brown-noise</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://noise.dog/?p=mr</loc>
+    <loc>https://noise.dog/midnight-rain</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://noise.dog/?p=em</loc>
+    <loc>https://noise.dog/embers</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://noise.dog/?p=cw</loc>
+    <loc>https://noise.dog/coastal-wind</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://noise.dog/?p=dr</loc>
+    <loc>https://noise.dog/drift</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
