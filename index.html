@@ -1081,6 +1081,12 @@
       color: rgba(255, 255, 255, 0.55);
       text-decoration: underline;
     }
+  /* LIF-734 v2: production baseline, only craft corrections. */
+    .preset-btn-add { width:34px; height:34px; padding:0 !important; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .preset-btn-add svg { display:block; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation:none !important; transition:none !important; }
+    }
   </style>
   <script type="application/ld+json">
   {
@@ -1125,7 +1131,19 @@
 
   <div class="layout">
     <header class="brand" aria-label="noise.dog">
-      <img class="brand-mark" src="images/site-mark.svg" alt="" aria-hidden="true" width="28" height="28">
+      <svg class="brand-mark" aria-hidden="true" width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <!-- Tail: C-curve — base at rump, sweeps left/up, tip curls over back -->
+  <path d="M 16.5,47.2 C 5,28.5 12.8,8.2 37.5,20.0" stroke="#c8a96e" stroke-width="6.4" stroke-linecap="round" fill="none"/>
+  <!-- Body + Head: unified angular silhouette, dog facing right -->
+  <path d="M 15.2,46.2 L 65.8,39.0 L 67.2,30.4 L 69.8,26.4 L 72.0,26.4 L 74.8,8.6 L 77.6,26.4 L 80.2,26.4 L 83.0,8.4 L 85.8,26.4 L 88.4,29.0 L 92.4,32.6 L 94.8,32.6 L 99.4,35.8 L 99.4,39.6 L 99.4,42.8 L 96.8,45.6 L 94.0,47.0 L 88.2,46.8 L 84.2,50.0 L 79.2,54.0 L 74.8,57.6 L 70.6,60.8 L 66.6,63.0 Q 42.0,66.4 15.2,64.0 Z" fill="#c8a96e"/>
+  <!-- Rear legs -->
+  <rect x="14.8" y="63.6" width="7.0" height="25.4" fill="#c8a96e"/>
+  <rect x="27.8" y="63.6" width="7.0" height="25.4" fill="#c8a96e"/>
+  <!-- Front legs -->
+  <rect x="57.2" y="62.8" width="7.0" height="26.2" fill="#c8a96e"/>
+  <rect x="68.8" y="61.2" width="7.0" height="27.8" fill="#c8a96e"/>
+</svg>
+
       <h1 class="brand-title">noise.dog</h1>
     </header>
 
@@ -1517,6 +1535,13 @@
     const iconPause = document.getElementById('iconPause');
 
     function updatePlayIcon(playing) {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        iconPlay.style.display = playing ? 'none' : 'block';
+        iconPlay.style.opacity = playing ? '0' : '1';
+        iconPause.style.display = playing ? 'block' : 'none';
+        iconPause.style.opacity = playing ? '1' : '0';
+        return;
+      }
       if (playing) {
         iconPlay.style.opacity = '0';
         setTimeout(() => {
@@ -1804,7 +1829,7 @@
       addBtn.className = 'preset-btn preset-btn-add';
       addBtn.type = 'button';
       addBtn.setAttribute('aria-label', 'Create custom soundscape');
-      addBtn.textContent = '+';
+      addBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>';
       addBtn.addEventListener('click', () => openConfigurator(null));
       presetSelector.appendChild(addBtn);
     }
