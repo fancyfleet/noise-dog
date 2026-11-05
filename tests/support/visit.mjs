@@ -238,8 +238,13 @@ export async function launch() {
  * `holdCountJs`: count.js is not delivered until `visit.releaseCountJs()` (a slow third-party script).
  * `blockCountJs`: count.js never loads (content blocker, offline, GoatCounter down).
  */
-export async function openVisit(browser, { holdCountJs = false, blockCountJs = false, autoplayBlocked = false } = {}) {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+export async function openVisit(browser, { holdCountJs = false, blockCountJs = false, autoplayBlocked = false, reducedMotion = null } = {}) {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    // prefers-reduced-motion emulation (LIF-745): a real media setting, so matchMedia and the
+    // CSS media block both see it — no stubbing inside the page.
+    ...(reducedMotion ? { reducedMotion } : {}),
+  });
   const page = await context.newPage();
   const visit = new Visit(context, page);
   visit.blockCountJs = blockCountJs;
