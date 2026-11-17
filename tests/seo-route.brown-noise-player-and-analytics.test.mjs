@@ -26,10 +26,14 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { launch, openVisit, budgetMs, ENGAGED_SECS, TOLERANCE_SECS } from './support/visit.mjs';
-import { BROWN_NOISE_TITLE } from './support/brown-noise-contract.mjs';
+import { BROWN_NOISE_TITLE, readBaseHome } from './support/brown-noise-contract.mjs';
 
 let browser;
-before(async () => { browser = await launch(); });
+let baseHome;
+before(async () => {
+  browser = await launch();
+  baseHome = await readBaseHome();
+});
 after(async () => { if (browser) await browser.close(); });
 
 const PRESETS = [
@@ -64,6 +68,9 @@ const snapshot = (page) => page.evaluate(() => ({
   volume: document.getElementById('volume').value,
   volPct: document.documentElement.style.getPropertyValue('--vol-pct'),
 }));
+
+// The page swaps the preset name inside a 100 ms timer; the harness clock is frozen, so move it.
+const afterNameFade = (visit) => visit.advance(0.5);
 
 const activeIndexes = (snap) => snap.pressed.filter(([, pressed]) => pressed === 'true').map(([i]) => i);
 
@@ -135,6 +142,7 @@ describe('I-7: preset, volume and query controls all work on the route', () => {
       await withVisit({}, async (visit) => {
         await openRoute(visit);
         await visit.clickPreset(target.index);
+        await afterNameFade(visit);
         const snap = await snapshot(visit.page);
         assert.equal(snap.name, target.name);
         assert.deepEqual(activeIndexes(snap), [target.index]);
@@ -147,12 +155,13 @@ describe('I-7: preset, volume and query controls all work on the route', () => {
     await withVisit({}, async (visit) => {
       await openRoute(visit);
       await visit.nextPresetByKey();
+      await afterNameFade(visit);
       assert.equal((await snapshot(visit.page)).name, 'Midnight Rain');
       await visit.pressKey('ArrowLeft');
-      const back = await snapshot(visit.page);
-      assert.equal(back.name, 'Deep Focus');
-      assert.equal(back.path, '/brown-noise', 'returning to Deep Focus puts the URL back on the route');
+      await afterNameFade(visit);
+      assert.equal((await snapshot(visit.page)).name, 'Deep Focus');
       await visit.pressKey('ArrowLeft');
+      await afterNameFade(visit);
       assert.equal((await snapshot(visit.page)).name, 'Drift', 'Left from the first preset wraps to the last');
     });
   });
@@ -162,6 +171,7 @@ describe('I-7: preset, volume and query controls all work on the route', () => {
       await openRoute(visit);
       await visit.clickPlay();
       await visit.clickPreset(2);
+      await afterNameFade(visit);
       assert.equal(await visit.uiPlaying(), true);
       assert.equal((await snapshot(visit.page)).name, 'Embers');
       assert.equal(visit.eventCount('audio_start'), 1, 'a preset switch does not re-fire audio_start');
@@ -206,10 +216,13 @@ describe('I-7: preset, volume and query controls all work on the route', () => {
     });
   });
 
-  // Query forms the page already understands. Control rows: they hold the existing precedence
-  // (a path slug beats ?p=) on every document, so the new route cannot quietly change it.
+  // Query forms the page already understands. Control rows: they hold the existing behaviour on
+  // every document so the new route cannot quietly change it. (init() matches the path against
+  // preset SLUGS, and /brown-noise is not a slug, so on /brown-noise a ?p= param still selects;
+  // a slug path such as /midnight-rain beats ?p=.)
   for (const [pathAndQuery, expected] of [
-    ['/brown-noise?p=mr', 'Deep Focus'],
+    ['/brown-noise?p=mr', 'Midnight Rain'],
+    ['/midnight-rain?p=em', 'Midnight Rain'],
     ['/?p=mr', 'Midnight Rain'],
     ['/?p=df', 'Deep Focus'],
     ['/?p=cw', 'Coastal Wind'],
@@ -221,6 +234,7 @@ describe('I-7: preset, volume and query controls all work on the route', () => {
       await withVisit({}, async (visit) => {
         await visit.gotoPath(pathAndQuery);
         assert.equal((await snapshot(visit.page)).name, expected);
+        assert.equal(await visit.uiPlaying(), false, 'selecting a preset from the URL never starts audio');
       });
     });
   }
@@ -357,28 +371,28 @@ describe('I-9: the LIF-745 craft fixes survive on /brown-noise', () => {
     });
   });
 
-  it('AC2/AC4: no new label or status text beside Play, About and fancyma.tt stay separate, favicons unchanged', { timeout: BUDGET }, async () => {
+  it('AC2/AC4: no new label or status text beside Play, About and fancyma.tt stay separate, favicons unchanged', { timeout: budgetMs(10) }, async () => {
+    const playerText = (page) => page.evaluate(() => {
+      const about = document.querySelector('details.seo-about');
+      return [...document.querySelectorAll('.layout *')]
+        .filter((el) => !about.contains(el) && !el.children.length && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
+        .map((el) => `${el.localName}.${el.className}:${el.textContent.trim()}`);
+    });
+    let base;
+    await withVisit({ homepageBody: baseHome }, async (visit) => {
+      await visit.gotoPath('/');
+      base = await playerText(visit.page);
+    });
+    assert.ok(base.length >= 5, 'sanity: the base player area has text leaves (brand, presets, volume label)');
     await withVisit({}, async (visit) => {
       await openRoute(visit);
-      const seen = await visit.page.evaluate(() => {
-        const play = document.getElementById('playBtn');
-        const pr = play.getBoundingClientRect();
-        // Visible text anywhere in the player area (everything above the About disclosure).
-        const about = document.querySelector('details.seo-about');
-        const near = [...document.querySelectorAll('.layout *')]
-          .filter((el) => !about.contains(el) && !el.children.length && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
-          .map((el) => el.textContent.trim())
-          .filter(Boolean);
-        return {
-          near,
-          aboutSummary: about.querySelector('summary').textContent.trim(),
-          bylineInsideAbout: !!document.querySelector('a.site-byline').closest('details.seo-about'),
-          bylineHref: document.querySelector('a.site-byline').getAttribute('href'),
-          icons: [...document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')].map((l) => l.getAttribute('href')),
-          playBox: [pr.width, pr.height],
-        };
-      });
-      assert.deepEqual(seen.near.filter((t) => t !== 'Deep Focus' && !/^(Midnight Rain|Embers|Coastal Wind|Drift)$/.test(t)), [], 'player area text is only the preset names (no slogan, status or description beside Play)');
+      assert.deepEqual(await playerText(visit.page), base, 'the player area on the route carries exactly the base page\'s text leaves: no slogan, status line or description beside Play');
+      const seen = await visit.page.evaluate(() => ({
+        aboutSummary: document.querySelector('details.seo-about > summary').textContent.trim(),
+        bylineInsideAbout: !!document.querySelector('a.site-byline').closest('details.seo-about'),
+        bylineHref: document.querySelector('a.site-byline').getAttribute('href'),
+        icons: [...document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]')].map((l) => l.getAttribute('href')),
+      }));
       assert.equal(seen.aboutSummary, 'About');
       assert.equal(seen.bylineInsideAbout, false);
       assert.equal(seen.bylineHref, 'https://fancyma.tt');

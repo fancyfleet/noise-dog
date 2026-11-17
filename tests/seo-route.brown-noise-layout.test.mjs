@@ -67,8 +67,9 @@ const overflow = (page) => page.evaluate(() => ({
 }));
 
 async function openAbout(page) {
+  // The page clock is frozen by the harness, so requestAnimationFrame never fires: layout is read
+  // synchronously by getBoundingClientRect, which forces it, and needs no frame to settle.
   await page.locator('details.seo-about > summary').click();
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
 }
 
 // ─── I-10: the player does not move ─────────────────────────────────
@@ -152,7 +153,6 @@ describe('I-12: the route\'s About copy is readable and reachable', () => {
         await openAbout(visit.page);
         const last = visit.page.locator('.seo-about-body > p').last();
         await last.scrollIntoViewIfNeeded();
-        await visit.page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
         const hit = await last.evaluate((el) => {
           const r = el.getBoundingClientRect();
           const top = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(r.height / 2, 12));
