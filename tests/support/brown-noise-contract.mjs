@@ -115,6 +115,7 @@ function summarise(html) {
     shell: norm(shell.innerHTML),
     headRest,
     styleText: [...doc.querySelectorAll('style')].map((s) => s.textContent).join('\n'),
+    scriptText: [...doc.querySelectorAll('script:not([src]):not([type="application/ld+json"])')].map((s) => s.textContent).join('\n'),
     counter,
   };
 }

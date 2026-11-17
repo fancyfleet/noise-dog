@@ -13,7 +13,9 @@ Developed by [fancymatt](https://fancyma.tt)
 
 ## Development
 
-This is a static site — one `index.html` + `images/`. No build step.
+This is a static site — two documents, `index.html` (the player at `/`) and `brown-noise.html` (the distinct `/brown-noise` landing document, LIF-938), plus `images/`. No build step.
+
+`brown-noise.html` is a committed copy of `index.html` that differs only in `<title>`, meta description, `og:url`, canonical and the About body. **Every `index.html` change (styles, player markup, inline script, head) must be mirrored into `brown-noise.html`**; the suite enforces this for stylesheet, player shell, head and inline script. The host serves `/<name>` from `<name>.html` (vhost `try_files $uri $uri.html $uri/ /index.html`, INF-8661); without it `/brown-noise` falls back to `index.html`.
 
 **Local dev setup:**
 ```bash
@@ -41,7 +43,7 @@ A reload or navigation is a new visit and counts again. Preset switches keep the
 
 ## Tests
 
-`npm ci --include=dev && npx playwright-core install chromium && npm test` (30 tests, about 100 s, hermetic). See `tests/README.md`.
+`npm ci --include=dev && npx playwright-core install chromium && npm test` (157 tests, about 150 s, hermetic). See `tests/README.md`.
 
 ## Deploy
 
@@ -58,7 +60,7 @@ Production tracks **`main`** (trunk-based; `develop` is legacy and being retired
    ```bash
    ssh root@146.190.2.164 'cd /var/www/noise.dog && git pull origin main'
    ```
-4. Verify: `curl -s https://noise.dog/ | sha256sum` should equal `git show origin/main:index.html | sha256sum`.
+4. Verify: `curl -s https://noise.dog/ | sha256sum` should equal `git show origin/main:index.html | sha256sum`, and `curl -s https://noise.dog/brown-noise | sha256sum` should equal `git show origin/main:brown-noise.html | sha256sum` (and differ from `/`).
 
 Containerized agents cannot SSH to Yaguchi; step 3 is run by Grover or Matt.
 

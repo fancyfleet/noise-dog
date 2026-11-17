@@ -221,6 +221,8 @@ describe('I-4: no structured data, no medical claims, no route-specific styling,
   it('AC2/AC4: no route-specific styling and no new head metadata: styles equal the homepage\'s; icons/viewport/robots/sitemap link/analytics tag equal the base', { timeout: BUDGET }, async () => {
     const { homeSum, brownSum, baseSum } = await docs();
     assert.equal(brownSum.styleText, homeSum.styleText, 'existing design is the contract: the new document ships the same stylesheet as the homepage');
+    assert.equal(brownSum.scriptText, homeSum.scriptText, 'the new document ships the same inline app script (player, routing, LIF-691 analytics, ?internal= namespace) as the homepage; mirror every index.html script change into brown-noise.html');
+    assert.ok(brownSum.scriptText.length > 1000, 'the inline app script was found (guards the comparison against comparing two empty strings)');
     assert.deepEqual(brownSum.headRest, baseSum.headRest);
     assert.deepEqual(brownSum.counter, baseSum.counter, 'the GoatCounter script tag (LIF-691 transport) is carried over unchanged');
     assert.equal(brownSum.counter.length, 1);
