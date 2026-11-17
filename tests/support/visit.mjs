@@ -20,11 +20,10 @@
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium } from 'playwright-core';
+import { ROOT, respond } from './serve.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const GOATCOUNTER_JS = path.join(ROOT, 'tests', 'fixtures', 'goatcounter-count.js');
 
 export const ORIGIN = 'https://noise.dog';
@@ -39,15 +38,6 @@ export const SETTLE_MS = 150;
 export const BASE_BUDGET_MS = 30_000;
 export const REAL_MS_PER_SIM_SEC = 50;
 export const budgetMs = (simSeconds) => BASE_BUDGET_MS + simSeconds * REAL_MS_PER_SIM_SEC;
-
-const CONTENT_TYPES = {
-  '.html': 'text/html; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.xml': 'application/xml',
-  '.js': 'application/javascript',
-  '.json': 'application/json',
-};
 
 // Runs in the page before any page script. Wraps the real AudioContext.
 function installControlledAudio() {
@@ -148,6 +138,12 @@ export class Visit {
     await this.settle();
   }
 
+  /** Visit an absolute path on the origin, e.g. '/brown-noise?v=30' (LIF-938: the route has its own document). */
+  async gotoPath(pathAndQuery, waitUntil = 'load') {
+    await this.page.goto(`${ORIGIN}${pathAndQuery}`, { waitUntil });
+    await this.settle();
+  }
+
   async reload() {
     await this.page.reload({ waitUntil: 'load' });
     await this.settle();
@@ -238,9 +234,16 @@ export async function launch() {
  * `holdCountJs`: count.js is not delivered until `visit.releaseCountJs()` (a slow third-party script).
  * `blockCountJs`: count.js never loads (content blocker, offline, GoatCounter down).
  */
-export async function openVisit(browser, { holdCountJs = false, blockCountJs = false, autoplayBlocked = false, reducedMotion = null } = {}) {
+export async function openVisit(browser, {
+  holdCountJs = false, blockCountJs = false, autoplayBlocked = false, reducedMotion = null,
+  // LIF-938: a visit with JavaScript off (what a crawler's first fetch sees), a different viewport
+  // from the first paint, and `homepageBody` to answer the fallback/home request with a fixed
+  // document (the committed base-SHA home page) so rendering can be compared against it.
+  javaScriptEnabled = true, viewport = { width: 1280, height: 800 }, homepageBody = null,
+} = {}) {
   const context = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
+    viewport,
+    javaScriptEnabled,
     // prefers-reduced-motion emulation (LIF-745): a real media setting, so matchMedia and the
     // CSS media block both see it — no stubbing inside the page.
     ...(reducedMotion ? { reducedMotion } : {}),
@@ -261,17 +264,9 @@ export async function openVisit(browser, { holdCountJs = false, blockCountJs = f
     const url = new URL(route.request().url());
 
     if (url.origin === ORIGIN) {
-      const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
-      const file = path.join(ROOT, rel);
-      if (!file.startsWith(ROOT + path.sep) || rel.startsWith('tests/') || rel.startsWith('node_modules/')) {
-        return route.fulfill({ status: 404, body: 'not found' });
-      }
-      try {
-        const body = await readFile(file);
-        return route.fulfill({ status: 200, body, contentType: CONTENT_TYPES[path.extname(file)] || 'application/octet-stream' });
-      } catch {
-        return route.fulfill({ status: 404, body: 'not found' });
-      }
+      const res = await respond(url.pathname, { fallbackBody: homepageBody });
+      if (res.status === 301) return route.fulfill({ status: 301, headers: { location: `${ORIGIN}${res.location}` }, body: '' });
+      return route.fulfill({ status: res.status, body: res.body ?? '', contentType: res.contentType || 'text/plain' });
     }
 
     if (url.origin === 'https://gc.zgo.at' && url.pathname === '/count.js') {
