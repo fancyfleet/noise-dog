@@ -236,7 +236,9 @@ describe('I-13: the homepage "Brown noise generator" link is a visible, understa
     await withVisit({}, async (visit) => {
       await visit.gotoPath('/');
       await openAbout(visit.page);
-      await visit.page.getByRole('link', { name: HOME_LINK_TEXT, exact: true }).click();
+      const link = visit.page.getByRole('link', { name: HOME_LINK_TEXT, exact: true });
+      assert.equal(await link.count(), 1, 'one visible "Brown noise generator" link in the opened About');
+      await link.click();
       await visit.page.waitForURL('https://noise.dog/brown-noise');
       await visit.settle();
       assert.equal(await visit.page.title(), BROWN_NOISE_TITLE);
